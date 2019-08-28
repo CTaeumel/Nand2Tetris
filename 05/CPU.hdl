@@ -41,7 +41,7 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    ARegister(in=InstCheckMux, load=loadA, out=regA, out[0..14]=addressM); // A-Register
+    ARegister(in=ARegInput, load=loadA, out=regA, out[0..14]=addressM); // A-Register
     DRegister(in=aluOut, load=loadD, out=regD); // D-Register
 
     ALU(x=regD, y=ARegOrMemeory, zx=instruction[11], 
@@ -51,29 +51,28 @@ CHIP CPU {
     PC(in=regA, load=jmp, inc=true, reset=reset, out[0..14]=pc);
 
     //Check if input for A Register is from alu or from D
-    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=InstCheckMux);
+    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=ARegInput);
 
     //Check if Input to Alu from Memory or A Register
     Mux16(a=regA, b=inM, sel=instruction[12], out=ARegOrMemeory);
 
-    //check if jump; also pürfend ob der load eingang vom PC gesetzt werden soll
-    Not(in=isNegative, out=isPositive); // is >= 0
-    Not(in=isZero, out=notZero); //  is =/= 0
-    And(a=notZero, b=isPositive, out=greaterThanTmp); // is > 0
-    And(a=instruction[0], b=greaterThanTmp, out=greaterThan); // Und verknüpfung mit dem dazugehörigen instruction bit
-
+    //jmp logic; prüfen ob der load eingang vom PC gesetzt werden soll
     And(a=instruction[1], b=isZero, out=Equals); // equals zero; einfach von Alu übernehehmen
     And(a=instruction[2], b=isNegative, out=lessThan); // negativ; einfach von Alu übernehehmen
 
-    Or(a=greaterThan, b=lessThan, out=GtLsOr);
-    Or(a=GtLsOr, b=Equals, out=tempJmp);
+    Or(a=isZero, b=isNegative, out=ZeroOrNegative); // größer 0 = nicht kleiner oder gleich null
+    Not(in=ZeroOrNegative, out=notZeroOrNegative);
+    And(a=instruction[0], b=notZeroOrNegative, out=greaterThan); 
+
+    Or(a=Equals, b=lessThan, out=EqualOrLess); // Wenn eins der Jmp true dann springen
+    Or(a=greaterThan, b=EqualOrLess, out=tempJmp);
 
     And(a=instruction[15], b=tempJmp, out=jmp); // nur Springen wenn D instruction
+
     // Dst
     And(a=instruction[15], b=instruction[3], out=writeM); // writeM ist immer gleich inst bit 3 bei einer D inst
     Or(a=instruction[5], b=isAInstruction, out=loadA); // checkt ob entweder A int oder zu A aus der ALU geschrieben werden soll
     Not(in=instruction[15], out=isAInstruction); // helfer not für A inst
-    And(a=instruction[4], b=instruction[15], out=loadD); // check ob D Reg geladen werden soll; wenn D instruction und Dest für D angegeben
-        
+    And(a=instruction[4], b=instruction[15], out=loadD); // check ob D Reg geladen werden soll; wenn D instruction und Dest für D angegeben  
 
 }
