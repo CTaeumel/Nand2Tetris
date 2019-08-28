@@ -24,6 +24,8 @@
  * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
  * than to the address resulting from executing the current instruction. 
  */
+ // 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1  0
+ // 1  1  1  a  c1 c2 c3 c4 c5 c6 d1 d2 d3 j1 j2 j3 
 
 CHIP CPU {
 
@@ -39,5 +41,39 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    ARegister(in=InstCheckMux, load=loadA, out=regA, out[0..14]=addressM); // A-Register
+    DRegister(in=aluOut, load=loadD, out=regD); // D-Register
+
+    ALU(x=regD, y=ARegOrMemeory, zx=instruction[11], 
+        nx=instruction[10], zy=instruction[9], ny=instruction[8], 
+        f=instruction[7], no=instruction[6] , out=aluOut, out=outM, zr=isZero, ng=isNegative);
+
+    PC(in=regA, load=jmp, inc=true, reset=reset, out[0..14]=pc);
+
+    //Check if input for A Register is from alu or from D
+    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=InstCheckMux);
+
+    //Check if Input to Alu from Memory or A Register
+    Mux16(a=regA, b=inM, sel=instruction[12], out=ARegOrMemeory);
+
+    //check if jump; also pürfend ob der load eingang vom PC gesetzt werden soll
+    Not(in=isNegative, out=isPositive); // is >= 0
+    Not(in=isZero, out=notZero); //  is =/= 0
+    And(a=notZero, b=isPositive, out=greaterThanTmp); // is > 0
+    And(a=instruction[0], b=greaterThanTmp, out=greaterThan); // Und verknüpfung mit dem dazugehörigen instruction bit
+
+    And(a=instruction[1], b=isZero, out=Equals); // equals zero; einfach von Alu übernehehmen
+    And(a=instruction[2], b=isNegative, out=lessThan); // negativ; einfach von Alu übernehehmen
+
+    Or(a=greaterThan, b=lessThan, out=GtLsOr);
+    Or(a=GtLsOr, b=Equals, out=tempJmp);
+
+    And(a=instruction[15], b=tempJmp, out=jmp); // nur Springen wenn D instruction
+    // Dst
+    And(a=instruction[15], b=instruction[3], out=writeM); // writeM ist immer gleich inst bit 3 bei einer D inst
+    Or(a=instruction[5], b=isAInstruction, out=loadA); // checkt ob entweder A int oder zu A aus der ALU geschrieben werden soll
+    Not(in=instruction[15], out=isAInstruction); // helfer not für A inst
+    And(a=instruction[4], b=instruction[15], out=loadD); // check ob D Reg geladen werden soll; wenn D instruction und Dest für D angegeben
+        
+
 }
